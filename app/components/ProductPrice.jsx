@@ -8,11 +8,15 @@ import {Money} from '@shopify/hydrogen';
  */
 export function ProductPrice({price, compareAtPrice}) {
   return (
-    <div aria-label="Price" className="product-price" role="group">
+    <div aria-label="Price" className="flex items-center gap-3 font-sans text-sm tracking-widest text-foreground/80" role="group">
       {compareAtPrice ? (
-        <div className="product-price-on-sale">
-          {price ? <Money data={price} /> : null}
-          <s>
+        <div className="flex gap-2 items-center">
+          {price ? (
+            <span className="text-accent font-medium">
+              <Money data={price} />
+            </span>
+          ) : null}
+          <s className="text-foreground/40 text-xs">
             <Money data={compareAtPrice} />
           </s>
         </div>

@@ -1,60 +1,69 @@
-import {createContext, useContext, useEffect, useState} from 'react';
-import {useId} from 'react';
+import {createContext, useContext, useState, useEffect} from 'react';
+import {motion, AnimatePresence} from 'framer-motion';
 
 /**
- * A side bar component with Overlay
+ * A side bar component that can be used for navigation, cart, etc.
  * @example
  * ```jsx
  * <Aside type="search" heading="SEARCH">
  *  <input type="search" />
- *  ...
  * </Aside>
  * ```
- * @param {{
- *   children?: React.ReactNode;
- *   type: AsideType;
- *   heading: React.ReactNode;
- * }}
  */
 export function Aside({children, heading, type}) {
   const {type: activeType, close} = useAside();
   const expanded = type === activeType;
-  const id = useId();
-  useEffect(() => {
-    const abortController = new AbortController();
 
+  useEffect(() => {
     if (expanded) {
-      document.addEventListener(
-        'keydown',
-        function handler(event) {
-          if (event.key === 'Escape') {
-            close();
-          }
-        },
-        {signal: abortController.signal},
-      );
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
     }
-    return () => abortController.abort();
-  }, [close, expanded]);
+  }, [expanded]);
 
   return (
-    <div
-      aria-modal
-      className={`overlay ${expanded ? 'expanded' : ''}`}
-      role="dialog"
-      aria-labelledby={id}
-    >
-      <button className="close-outside" onClick={close} />
-      <aside>
-        <header>
-          <h3 id={id}>{heading}</h3>
-          <button className="close reset" onClick={close} aria-label="Close">
-            &times;
-          </button>
-        </header>
-        <main>{children}</main>
-      </aside>
-    </div>
+    <AnimatePresence>
+      {expanded && (
+        <div className="fixed inset-0 z-[100] flex justify-end">
+          {/* Backdrop */}
+          <motion.button
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={close}
+            className="absolute inset-0 bg-black/20 backdrop-blur-sm cursor-default"
+          />
+
+          {/* Drawer */}
+          <motion.aside
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+            className="relative w-screen max-w-md h-full bg-[#EEEEEE] shadow-[-50px_0_100px_rgba(0,0,0,0.05)] border-l border-foreground/5 flex flex-col"
+          >
+            {/* Header */}
+            <header className="flex items-center justify-between px-8 py-12 border-b border-foreground/5">
+              <h2 className="text-3xl font-serif italic tracking-tighter uppercase">{heading}</h2>
+              <button 
+                onClick={close}
+                className="group flex flex-col items-end gap-1.5"
+                aria-label="Close"
+              >
+                <span className="text-[10px] uppercase tracking-[0.2em] font-bold opacity-30 group-hover:opacity-100 transition-opacity">Close</span>
+                <div className="w-6 h-[1px] bg-foreground/20 group-hover:w-8 group-hover:bg-foreground transition-all duration-500" />
+              </button>
+            </header>
+
+            {/* Content Container */}
+            <main className="flex-1 overflow-y-auto px-8 py-12 custom-scrollbar">
+              {children}
+            </main>
+          </motion.aside>
+        </div>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -77,20 +86,9 @@ Aside.Provider = function AsideProvider({children}) {
 };
 
 export function useAside() {
-  const aside = useContext(AsideContext);
-  if (!aside) {
+  const context = useContext(AsideContext);
+  if (!context) {
     throw new Error('useAside must be used within an AsideProvider');
   }
-  return aside;
+  return context;
 }
-
-/** @typedef {'search' | 'cart' | 'mobile' | 'closed'} AsideType */
-/**
- * @typedef {{
- *   type: AsideType;
- *   open: (mode: AsideType) => void;
- *   close: () => void;
- * }} AsideContextValue
- */
-
-/** @typedef {import('react').ReactNode} ReactNode */

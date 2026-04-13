@@ -3,12 +3,14 @@ import {getPaginationVariables, Analytics} from '@shopify/hydrogen';
 import {SearchForm} from '~/components/SearchForm';
 import {SearchResults} from '~/components/SearchResults';
 import {getEmptyPredictiveSearchResult} from '~/lib/search';
+import {ProductItem} from '~/components/ProductItem';
+import {motion} from 'framer-motion';
 
 /**
  * @type {Route.MetaFunction}
  */
 export const meta = () => {
-  return [{title: `Hydrogen | Search`}];
+  return [{title: `LOOREA | Search Products`}];
 };
 
 /**
@@ -30,7 +32,7 @@ export async function loader({request, context}) {
 }
 
 /**
- * Renders the /search route
+ * Renders the /search route with the Boutique editorial grid
  */
 export default function SearchPage() {
   /** @type {LoaderReturnData} */
@@ -38,33 +40,59 @@ export default function SearchPage() {
   if (type === 'predictive') return null;
 
   return (
-    <div className="search">
-      <h1>Search</h1>
-      <SearchForm>
-        {({inputRef}) => (
-          <>
-            <input
-              defaultValue={term}
-              name="q"
-              placeholder="Search…"
-              ref={inputRef}
-              type="search"
-            />
-            &nbsp;
-            <button type="submit">Search</button>
-          </>
-        )}
-      </SearchForm>
-      {error && <p style={{color: 'red'}}>{error}</p>}
+    <div className="search-page min-h-screen pt-32 px-12 md:px-24 pb-64">
+      {/* Editorial Search Header */}
+      <header className="mb-24 space-y-8">
+        <div className="flex flex-col gap-4">
+           <span className="text-[10px] uppercase tracking-[0.5em] text-accent font-bold italic">Discovery</span>
+           <h1 className="text-6xl md:text-8xl font-serif italic tracking-tighter leading-none">
+             Search <span className="opacity-20">Results</span>
+           </h1>
+        </div>
+      </header>
+
+      <section className="mb-24">
+        <SearchForm>
+          {({inputRef}) => (
+            <div className="relative border-b border-foreground/10 pb-4 max-w-2xl flex items-center justify-between">
+              <input
+                defaultValue={term}
+                name="q"
+                placeholder="Search the archive..."
+                ref={inputRef}
+                type="search"
+                className="bg-transparent border-none text-2xl font-light focus:ring-0 placeholder:text-foreground/20 w-full"
+              />
+              <button type="submit" className="text-[10px] uppercase tracking-[0.4em] font-bold text-accent hover:text-foreground transition-colors">
+                Explore
+              </button>
+            </div>
+          )}
+        </SearchForm>
+      </section>
+
+      {error && <p className="text-red-500 font-mono text-xs mb-8">{error}</p>}
+
       {!term || !result?.total ? (
-        <SearchResults.Empty />
+        <div className="py-32 flex flex-col items-center justify-center space-y-4 opacity-30">
+           <span className="text-[10px] uppercase tracking-[0.5em]">No findings for "{term}"</span>
+           <div className="w-20 h-[1px] bg-foreground/20" />
+        </div>
       ) : (
         <SearchResults result={result} term={term}>
-          {({articles, pages, products, term}) => (
-            <div>
-              <SearchResults.Products products={products} term={term} />
-              <SearchResults.Pages pages={pages} term={term} />
-              <SearchResults.Articles articles={articles} term={term} />
+          {({products, term}) => (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-24 gap-y-32">
+              {products.nodes.map((product, idx) => (
+                <motion.div
+                  key={product.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ delay: (idx % 2) * 0.1, duration: 1 }}
+                  viewport={{ once: true }}
+                >
+                  <ProductItem product={product} />
+                </motion.div>
+              ))}
             </div>
           )}
         </SearchResults>
@@ -87,33 +115,24 @@ const SEARCH_PRODUCT_FRAGMENT = `#graphql
     title
     trackingParameters
     vendor
-    selectedOrFirstAvailableVariant(
-      selectedOptions: []
-      ignoreUnknownOptions: true
-      caseInsensitiveMatch: true
-    ) {
-      id
-      image {
-        url
-        altText
-        width
-        height
-      }
-      price {
+    featuredImage {
+       url
+       altText
+       width
+       height
+    }
+    images(first: 2) {
+       nodes {
+          url
+          altText
+          width
+          height
+       }
+    }
+    priceRange {
+      minVariantPrice {
         amount
         currencyCode
-      }
-      compareAtPrice {
-        amount
-        currencyCode
-      }
-      selectedOptions {
-        name
-        value
-      }
-      product {
-        handle
-        title
       }
     }
   }
@@ -218,17 +237,30 @@ export const SEARCH_QUERY = `#graphql
 async function regularSearch({request, context}) {
   const {storefront} = context;
   const url = new URL(request.url);
-  const variables = getPaginationVariables(request, {pageBy: 8});
+  const variables = getPaginationVariables(request, {pageBy: 12});
   const term = String(url.searchParams.get('q') || '');
 
   // Search articles, pages, and products for the `q` term
-  const {errors, ...items} = await storefront.query(SEARCH_QUERY, {
+  const fetchedItems = await storefront.query(SEARCH_QUERY, {
     variables: {...variables, term},
-  });
+  }).catch(() => null);
 
-  if (!items) {
-    throw new Error('No search data returned from Shopify API');
+  if (!fetchedItems) {
+    return {
+      type: 'regular', 
+      term, 
+      result: {
+        total: 0, 
+        items: {
+          products: {nodes: []},
+          articles: {nodes: []},
+          pages: {nodes: []}
+        }
+      }
+    };
   }
+
+  const {errors, ...items} = fetchedItems;
 
   const total = Object.values(items).reduce(
     (acc, {nodes}) => acc + nodes.length,
@@ -385,7 +417,7 @@ async function predictiveSearch({request, context}) {
   if (!term) return {type, term, result: getEmptyPredictiveSearchResult()};
 
   // Predictively search articles, collections, pages, products, and queries (suggestions)
-  const {predictiveSearch: items, errors} = await storefront.query(
+  const fetchedPredictive = await storefront.query(
     PREDICTIVE_SEARCH_QUERY,
     {
       variables: {
@@ -395,17 +427,13 @@ async function predictiveSearch({request, context}) {
         term,
       },
     },
-  );
+  ).catch(() => null);
 
-  if (errors) {
-    throw new Error(
-      `Shopify API errors: ${errors.map(({message}) => message).join(', ')}`,
-    );
+  if (!fetchedPredictive) {
+    return {type, term, result: getEmptyPredictiveSearchResult()};
   }
 
-  if (!items) {
-    throw new Error('No predictive search data returned from Shopify API');
-  }
+  const {predictiveSearch: items, errors} = fetchedPredictive;
 
   const total = Object.values(items).reduce(
     (acc, item) => acc + item.length,

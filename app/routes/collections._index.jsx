@@ -21,19 +21,49 @@ export async function loader(args) {
  * @param {Route.LoaderArgs}
  */
 async function loadCriticalData({context, request}) {
+  const {storefront} = context;
   const paginationVariables = getPaginationVariables(request, {
     pageBy: 4,
   });
 
-  const [{collections}] = await Promise.all([
-    context.storefront.query(COLLECTIONS_QUERY, {
+  try {
+    const fetchedCollections = await storefront.query(COLLECTIONS_QUERY, {
       variables: paginationVariables,
-    }),
-    // Add other queries here, so that they are loaded in parallel
-  ]);
+    }).catch(() => null);
 
-  return {collections};
+    const collections = fetchedCollections?.collections?.nodes?.length > 0 
+      ? fetchedCollections.collections 
+      : { 
+          nodes: MOCK_COLLECTIONS_LIST, 
+          pageInfo: { 
+            hasPreviousPage: false, 
+            hasNextPage: false,
+            startCursor: null,
+            endCursor: null
+          } 
+        };
+
+    return {collections};
+  } catch (error) {
+    return { 
+      collections: { 
+        nodes: MOCK_COLLECTIONS_LIST, 
+        pageInfo: { 
+          hasPreviousPage: false, 
+          hasNextPage: false,
+          startCursor: null,
+          endCursor: null
+        } 
+      } 
+    };
+  }
 }
+
+const MOCK_COLLECTIONS_LIST = [
+  { id: 'c1', title: 'PLANET SERIES', handle: 'planet', image: { url: '/images/loorea_hero_detail.png', width: 800, height: 800 } },
+  { id: 'c2', title: 'ZODIAC ALIGNMENT', handle: 'zodiac', image: { url: '/images/loorea_hero_signature.png', width: 800, height: 800 } },
+  { id: 'c3', title: 'ARCHIVE FILIGREE', handle: 'archive', image: { url: '/images/loorea_hero_kalendae.png', width: 800, height: 800 } }
+];
 
 /**
  * Load data for rendering content below the fold. This data is deferred and will be

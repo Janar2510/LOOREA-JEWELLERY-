@@ -9,6 +9,7 @@ import {
   SearchFormPredictive,
 } from '~/components/SearchFormPredictive';
 import {SearchResultsPredictive} from '~/components/SearchResultsPredictive';
+import {VerticalBrandAnchor} from '~/components/BrandingElements';
 
 /**
  * @param {PageLayoutProps}
@@ -26,6 +27,7 @@ export function PageLayout({
       <CartAside cart={cart} />
       <SearchAside />
       <MobileMenuAside header={header} publicStoreDomain={publicStoreDomain} />
+      <VerticalBrandAnchor />
       {header && (
         <Header
           header={header}
@@ -34,7 +36,7 @@ export function PageLayout({
           publicStoreDomain={publicStoreDomain}
         />
       )}
-      <main>{children}</main>
+      <main id="mainContent">{children}</main>
       <Footer
         footer={footer}
         header={header}

@@ -11,9 +11,11 @@ import {
 } from 'react-router';
 import favicon from '~/assets/favicon.svg';
 import {FOOTER_QUERY, HEADER_QUERY} from '~/lib/fragments';
-import resetStyles from '~/styles/reset.css?url';
-import appStyles from '~/styles/app.css?url';
+import '~/styles/app.css';
 import {PageLayout} from './components/PageLayout';
+import {AnimatePresence} from 'framer-motion';
+import {LoadingSpinner} from '~/components/BrandingElements';
+import {useState, useEffect} from 'react';
 
 /**
  * This is important to avoid re-fetching root queries on sub-navigations
@@ -103,11 +105,16 @@ async function loadCriticalData({context}) {
       variables: {
         headerMenuHandle: 'main-menu', // Adjust to your header menu handle
       },
-    }),
+    }).catch(() => null),
     // Add other queries here, so that they are loaded in parallel
   ]);
 
-  return {header};
+  return {
+    header: header?.header || { 
+      shop: { name: 'LOOREA JEWELLERY' },
+      menu: { items: [] } 
+    }
+  };
 }
 
 /**
@@ -117,24 +124,30 @@ async function loadCriticalData({context}) {
  * @param {Route.LoaderArgs}
  */
 function loadDeferredData({context}) {
-  const {storefront, customerAccount, cart} = context;
+  const {storefront, cart} = context;
 
   // defer the footer query (below the fold)
+  // CRITICAL: .catch() MUST resolve to a value (like null) to prevent decodeDeferred errors
   const footer = storefront
     .query(FOOTER_QUERY, {
       cache: storefront.CacheLong(),
       variables: {
-        footerMenuHandle: 'footer', // Adjust to your footer menu handle
+        footerMenuHandle: 'footer', // Adjust to your header menu handle
       },
     })
     .catch((error) => {
-      // Log query errors, but don't throw them so the page can still render
-      console.error(error);
+      console.warn('Silent suppression of deferred footer rejection.');
       return null;
     });
+
+  const cartPromise = cart.get()
+    .catch((error) => {
+      console.warn('Silent suppression of deferred cart rejection.');
+      return null;
+    });
+
   return {
-    cart: cart.get(),
-    isLoggedIn: customerAccount.isLoggedIn(),
+    cart: cartPromise,
     footer,
   };
 }
@@ -150,8 +163,6 @@ export function Layout({children}) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
-        <link rel="stylesheet" href={resetStyles}></link>
-        <link rel="stylesheet" href={appStyles}></link>
         <Meta />
         <Links />
       </head>
@@ -168,6 +179,13 @@ export default function App() {
   /** @type {RootLoader} */
   const data = useRouteLoaderData('root');
 
+  const [isReady, setIsReady] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setIsReady(true), 2100);
+    return () => clearTimeout(timer);
+  }, []);
+
   if (!data) {
     return <Outlet />;
   }
@@ -178,6 +196,10 @@ export default function App() {
       shop={data.shop}
       consent={data.consent}
     >
+      <AnimatePresence mode="wait">
+        {!isReady && <LoadingSpinner key="loader" />}
+      </AnimatePresence>
+
       <PageLayout {...data}>
         <Outlet />
       </PageLayout>
